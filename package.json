@@ -1,0 +1,50 @@
+{
+  "name": "surfagent-mcp",
+  "version": "0.1.0",
+  "description": "MCP server for SurfAgent — gives AI agents a real managed Chrome browser via CDP. Navigate, click, type, screenshot, manage tabs, inspect DOM, fill forms, and more.",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "browser",
+    "chrome",
+    "cdp",
+    "ai-agent",
+    "surfagent",
+    "automation",
+    "web-scraping",
+    "claude",
+    "codex",
+    "openai"
+  ],
+  "homepage": "https://surfagent.app",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/surfagentapp/surfagent"
+  },
+  "license": "MIT",
+  "author": "SurfAgent <support@surfagent.app>",
+  "bin": {
+    "surfagent-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "npm run typecheck && esbuild src/index.ts --bundle --platform=node --target=node20 --format=cjs --outfile=dist/index.js && chmod +x dist/index.js",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.17.3",
+    "chrome-remote-interface": "^0.33.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.5",
+    "esbuild": "^0.25.10",
+    "typescript": "^5.9.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
