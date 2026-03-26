@@ -17,7 +17,7 @@ export const mapTools: ToolDefinition[] = [
         },
         maxPages: {
           type: "number",
-          description: "Maximum number of pages to visit during discovery (default: 100)."
+          description: "Maximum number of pages to visit during discovery (default: 50, max: 50)."
         },
         maxDepth: {
           type: "number",
