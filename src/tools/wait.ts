@@ -24,6 +24,9 @@ export const waitTools: ToolDefinition[] = [
       const input = asObject(args, "browser_wait arguments");
       const selector = asString(input.selector, "selector");
       const timeout = input.timeout === undefined ? 10_000 : asNumber(input.timeout, "timeout");
+      if (!Number.isFinite(timeout) || !Number.isInteger(timeout) || timeout < 100 || timeout > 120_000) {
+        throw new Error("timeout must be an integer between 100 and 120000 milliseconds.");
+      }
 
       await cdp.waitForSelector(selector, timeout);
       return textResult(`Selector ${selector} appeared within ${timeout}ms.`);

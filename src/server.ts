@@ -11,9 +11,12 @@ import { screenshotResource } from "./resources/screenshot.js";
 import { tabsResource } from "./resources/tabs.js";
 import { clickTools } from "./tools/click.js";
 import { cookiesTools } from "./tools/cookies.js";
+import { crawlTools } from "./tools/crawl.js";
 import { evaluateTools } from "./tools/evaluate.js";
+import { extractTools } from "./tools/extract.js";
 import { formsTools } from "./tools/forms.js";
 import { inspectTools } from "./tools/inspect.js";
+import { mapTools } from "./tools/map.js";
 import { navigateTools } from "./tools/navigate.js";
 import { screenshotTools } from "./tools/screenshot.js";
 import { scrollTools } from "./tools/scroll.js";
@@ -33,7 +36,10 @@ const TOOL_SET: ToolDefinition[] = [
   ...formsTools,
   ...evaluateTools,
   ...waitTools,
-  ...cookiesTools
+  ...cookiesTools,
+  ...extractTools,
+  ...crawlTools,
+  ...mapTools
 ];
 
 const RESOURCE_SET: ResourceDefinition[] = [screenshotResource, tabsResource];

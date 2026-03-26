@@ -1,7 +1,17 @@
 import CDP from "chrome-remote-interface";
+import net from "node:net";
 
 const DEFAULT_CDP_ENDPOINT = "ws://127.0.0.1:9222";
 const CONNECT_TIMEOUT_MS = 12_000;
+const MAX_FULLPAGE_WIDTH = 16_384;
+const MAX_FULLPAGE_HEIGHT = 16_384;
+const MAX_FULLPAGE_PIXELS = 64_000_000;
+const MAX_HTML_BYTES = 1_000_000;
+const MAX_TEXT_BYTES = 500_000;
+const MAX_EVAL_CODE_BYTES = 64_000;
+const MAX_EVAL_RESULT_BYTES = 1_000_000;
+const EVAL_TIMEOUT_MS = 10_000;
+const MAX_WAIT_TIMEOUT_MS = 120_000;
 
 type RawClient = {
   Page: {
@@ -22,6 +32,7 @@ type RawClient = {
       awaitPromise: boolean;
       returnByValue: boolean;
       userGesture: boolean;
+      timeout?: number;
     }) => Promise<{
       result: { value?: unknown; description?: string };
       exceptionDetails?: {
@@ -119,12 +130,34 @@ function parseEndpoint(rawValue: string): EndpointConfig {
     throw new Error(`Invalid CDP endpoint URL: ${rawValue}`);
   }
 
+  if (!["ws:", "wss:", "http:", "https:"].includes(parsed.protocol)) {
+    throw new Error(`Unsupported CDP endpoint protocol: ${parsed.protocol}`);
+  }
+
   const secure = parsed.protocol === "wss:" || parsed.protocol === "https:";
   const fallbackPort = secure ? 443 : 80;
   const port = parsed.port ? Number(parsed.port) : fallbackPort;
 
-  if (!Number.isFinite(port) || port <= 0) {
+  if (!parsed.hostname) {
+    throw new Error(`Invalid CDP endpoint host in ${rawValue}`);
+  }
+
+  if (!Number.isFinite(port) || port <= 0 || port > 65535) {
     throw new Error(`Invalid CDP endpoint port in ${rawValue}`);
+  }
+
+  const allowRemote = /^(true|1)$/i.test(process.env.SURFAGENT_CDP_ALLOW_REMOTE ?? "");
+  const isLoopback =
+    parsed.hostname === "localhost"
+    || parsed.hostname === "::1"
+    || parsed.hostname === "[::1]"
+    || parsed.hostname.startsWith("127.")
+    || parsed.hostname === "0.0.0.0"
+    || (net.isIP(parsed.hostname) === 0 && parsed.hostname.endsWith(".localhost"));
+  if (!allowRemote && !isLoopback) {
+    throw new Error(
+      `Remote CDP host "${parsed.hostname}" is blocked by default. Set SURFAGENT_CDP_ALLOW_REMOTE=true to override.`
+    );
   }
 
   return {
@@ -146,6 +179,62 @@ function stringifyError(error: unknown): string {
   return String(error);
 }
 
+function clampUtf8(value: string, maxBytes: number): string {
+  const size = Buffer.byteLength(value, "utf8");
+  if (size <= maxBytes) {
+    return value;
+  }
+
+  const suffix = `\n\n[truncated to ${maxBytes} bytes from ${size} bytes]`;
+  const suffixBytes = Buffer.byteLength(suffix, "utf8");
+  const budget = Math.max(0, maxBytes - suffixBytes);
+  const clipped = Buffer.from(value, "utf8").subarray(0, budget).toString("utf8");
+  return `${clipped}${suffix}`;
+}
+
+function clampEvaluatedValue(value: unknown): unknown {
+  if (typeof value === "string") {
+    return clampUtf8(value, MAX_EVAL_RESULT_BYTES);
+  }
+
+  try {
+    const serialized = JSON.stringify(value);
+    if (serialized === undefined) {
+      return value;
+    }
+
+    const size = Buffer.byteLength(serialized, "utf8");
+    if (size <= MAX_EVAL_RESULT_BYTES) {
+      return value;
+    }
+
+    return {
+      truncated: true,
+      bytes: size,
+      preview: clampUtf8(serialized, MAX_EVAL_RESULT_BYTES)
+    };
+  } catch {
+    return String(value);
+  }
+}
+
+function defaultCdpUrlFromEnv(): string {
+  const explicit = process.env.SURFAGENT_CDP_URL?.trim();
+  if (explicit) {
+    return explicit;
+  }
+
+  const legacyHost = process.env.CDP_HOST?.trim();
+  const legacyPort = process.env.CDP_PORT?.trim();
+  if (legacyHost || legacyPort) {
+    const host = legacyHost || "127.0.0.1";
+    const port = legacyPort || "9222";
+    return `ws://${host}:${port}`;
+  }
+
+  return DEFAULT_CDP_ENDPOINT;
+}
+
 export class CDPClient {
   private readonly endpoint: EndpointConfig;
 
@@ -155,7 +244,7 @@ export class CDPClient {
 
   private connectPromise: Promise<void> | null = null;
 
-  constructor(cdpUrl = process.env.SURFAGENT_CDP_URL ?? DEFAULT_CDP_ENDPOINT) {
+  constructor(cdpUrl = defaultCdpUrlFromEnv()) {
     this.endpoint = parseEndpoint(cdpUrl);
   }
 
@@ -400,6 +489,18 @@ export class CDPClient {
 
         const width = Math.max(1, Math.ceil(contentSize.width ?? 0));
         const height = Math.max(1, Math.ceil(contentSize.height ?? 0));
+        const totalPixels = width * height;
+
+        if (
+          width > MAX_FULLPAGE_WIDTH
+          || height > MAX_FULLPAGE_HEIGHT
+          || totalPixels > MAX_FULLPAGE_PIXELS
+        ) {
+          throw new Error(
+            `Full-page screenshot exceeds limits (requested ${width}x${height}). `
+            + `Max is ${MAX_FULLPAGE_WIDTH}x${MAX_FULLPAGE_HEIGHT} and ${MAX_FULLPAGE_PIXELS} total pixels.`
+          );
+        }
 
         const { data } = await client.Page.captureScreenshot({
           format: "png",
@@ -465,10 +566,11 @@ export class CDPClient {
         throw new Error(`Element not found for selector: ${selector}`);
       }
 
-      return html;
+      return clampUtf8(html, MAX_HTML_BYTES);
     }
 
-    return this.evaluateValue<string>("document.documentElement.outerHTML");
+    const html = await this.evaluateValue<string>("document.documentElement.outerHTML");
+    return clampUtf8(html, MAX_HTML_BYTES);
   }
 
   public async getText(selector?: string): Promise<string> {
@@ -482,10 +584,11 @@ export class CDPClient {
         throw new Error(`Element not found for selector: ${selector}`);
       }
 
-      return text;
+      return clampUtf8(text, MAX_TEXT_BYTES);
     }
 
-    return this.evaluateValue<string>("(document.body?.innerText || '').trim()");
+    const text = await this.evaluateValue<string>("(document.body?.innerText || '').trim()");
+    return clampUtf8(text, MAX_TEXT_BYTES);
   }
 
   public async getURL(): Promise<string> {
@@ -731,29 +834,30 @@ export class CDPClient {
   }
 
   public async evaluate(code: string): Promise<unknown> {
-    return this.withClient(async (client) => {
-      const response = await client.Runtime.evaluate({
-        expression: code,
-        awaitPromise: true,
-        returnByValue: true,
-        userGesture: true
-      });
+    const evalEnabled = /^(true|1)$/i.test(process.env.SURFAGENT_MCP_ENABLE_EVAL ?? "");
+    if (!evalEnabled) {
+      throw new Error(
+        "browser_evaluate is disabled by default. Set SURFAGENT_MCP_ENABLE_EVAL=true to enable it."
+      );
+    }
 
-      if (response.exceptionDetails) {
-        const details = response.exceptionDetails;
-        const text = details.exception?.description ?? details.exception?.value ?? details.text ?? "Unknown evaluation error";
-        throw new Error(`Evaluation failed: ${text}`);
-      }
+    if (typeof code !== "string" || code.trim() === "") {
+      throw new Error("code must be a non-empty string.");
+    }
 
-      if (Object.prototype.hasOwnProperty.call(response.result, "value")) {
-        return response.result.value;
-      }
+    const codeBytes = Buffer.byteLength(code, "utf8");
+    if (codeBytes > MAX_EVAL_CODE_BYTES) {
+      throw new Error(`Evaluation code exceeds ${MAX_EVAL_CODE_BYTES} bytes.`);
+    }
 
-      return response.result.description ?? null;
-    });
+    const value = await this.runtimeEvaluate(code);
+    return clampEvaluatedValue(value);
   }
 
   public async waitForSelector(selector: string, timeoutMs = 10_000): Promise<void> {
+    if (!Number.isFinite(timeoutMs) || !Number.isInteger(timeoutMs) || timeoutMs < 100 || timeoutMs > MAX_WAIT_TIMEOUT_MS) {
+      throw new Error(`timeoutMs must be an integer between 100 and ${MAX_WAIT_TIMEOUT_MS}.`);
+    }
     const started = Date.now();
 
     while (Date.now() - started <= timeoutMs) {
@@ -824,20 +928,48 @@ export class CDPClient {
   }
 
   private async evaluateValue<T>(code: string): Promise<T> {
-    const value = await this.evaluate(code);
+    const value = await this.runtimeEvaluate(code);
     return value as T;
   }
 
+  private async runtimeEvaluate(code: string): Promise<unknown> {
+    return this.withClient(async (client) => {
+      const response = await client.Runtime.evaluate({
+        expression: code,
+        awaitPromise: true,
+        returnByValue: true,
+        userGesture: true,
+        timeout: EVAL_TIMEOUT_MS
+      });
+
+      if (response.exceptionDetails) {
+        const details = response.exceptionDetails;
+        const text = details.exception?.description ?? details.exception?.value ?? details.text ?? "Unknown evaluation error";
+        throw new Error(`Evaluation failed: ${text}`);
+      }
+
+      if (Object.prototype.hasOwnProperty.call(response.result, "value")) {
+        return response.result.value;
+      }
+
+      return response.result.description ?? null;
+    });
+  }
+
   private assertUrl(value: string, allowAboutBlank = false): void {
-    if (allowAboutBlank && value === "about:blank") {
+    if (allowAboutBlank && value.trim().toLowerCase() === "about:blank") {
       return;
     }
 
+    let parsed: URL;
     try {
-      // eslint-disable-next-line no-new
-      new URL(value);
+      parsed = new URL(value);
     } catch {
       throw new Error(`Invalid URL: ${value}`);
+    }
+
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      throw new Error(`Unsupported URL protocol: ${parsed.protocol}`);
     }
   }
 
@@ -900,9 +1032,13 @@ export class CDPClient {
       }, CONNECT_TIMEOUT_MS);
     });
 
-    const client = await Promise.race([clientPromise, timeoutPromise]);
-    if (timeoutHandle) {
-      clearTimeout(timeoutHandle);
+    let client: RawClient;
+    try {
+      client = await Promise.race([clientPromise, timeoutPromise]);
+    } finally {
+      if (timeoutHandle) {
+        clearTimeout(timeoutHandle);
+      }
     }
 
     this.client = client;
