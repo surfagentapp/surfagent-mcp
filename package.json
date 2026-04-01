@@ -1,6 +1,6 @@
 {
   "name": "surfagent-mcp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "MCP server for SurfAgent — gives AI agents a real managed Chrome browser via CDP. Navigate, click, type, screenshot, manage tabs, inspect DOM, fill forms, and more.",
   "keywords": [
     "mcp",

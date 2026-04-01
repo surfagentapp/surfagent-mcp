@@ -87,6 +87,30 @@ Add to `~/.codeium/windsurf/mcp_config.json`:
 }
 ```
 
+### Hermes Agent (Nous Research)
+
+```bash
+hermes mcp add surfagent --command npx --args -y surfagent-mcp
+```
+
+Or manually in `~/.hermes/config.yaml`:
+
+```yaml
+mcp_servers:
+  surfagent:
+    command: npx
+    args:
+      - -y
+      - surfagent-mcp
+    env:
+      SURFAGENT_DAEMON_URL: http://localhost:7201
+```
+
+Verify with:
+```bash
+hermes mcp test surfagent
+```
+
 ### Codex CLI
 
 ```bash
