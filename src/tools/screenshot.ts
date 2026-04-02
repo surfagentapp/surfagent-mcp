@@ -1,5 +1,5 @@
 import type { ToolDefinition } from "../contracts.js";
-import { asObject, asOptionalBoolean, asOptionalString, imageResult, textResult } from "../tool-utils.js";
+import { asOptionalBoolean, asOptionalObject, asOptionalString, textResult } from "../tool-utils.js";
 
 export const screenshotTools: ToolDefinition[] = [
   {
@@ -20,7 +20,7 @@ export const screenshotTools: ToolDefinition[] = [
       additionalProperties: false
     },
     handler: async (args, { cdp }) => {
-      const input = asObject(args, "browser_screenshot arguments");
+      const input = asOptionalObject(args, "browser_screenshot arguments");
       const fullPage = asOptionalBoolean(input.fullPage);
       const selector = asOptionalString(input.selector);
 

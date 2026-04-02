@@ -23,6 +23,9 @@ import { scrollTools } from "./tools/scroll.js";
 import { tabsTools } from "./tools/tabs.js";
 import { typeTools } from "./tools/type.js";
 import { waitTools } from "./tools/wait.js";
+import { pageStateTools } from "./tools/page-state.js";
+import { siteDetectTools } from "./tools/site-detect.js";
+import { monitorTools } from "./tools/monitor.js";
 import { errorResult } from "./tool-utils.js";
 
 const TOOL_SET: ToolDefinition[] = [
@@ -39,7 +42,10 @@ const TOOL_SET: ToolDefinition[] = [
   ...cookiesTools,
   ...extractTools,
   ...crawlTools,
-  ...mapTools
+  ...mapTools,
+  ...pageStateTools,
+  ...siteDetectTools,
+  ...monitorTools
 ];
 
 const RESOURCE_SET: ResourceDefinition[] = [screenshotResource, tabsResource];
@@ -73,7 +79,7 @@ export function createSurfAgentServer(): {
   const server = new Server(
     {
       name: "surfagent-mcp",
-      version: "0.1.0"
+      version: "0.2.0"
     },
     {
       capabilities: {

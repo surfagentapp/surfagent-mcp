@@ -1,5 +1,5 @@
 import type { ToolDefinition } from "../contracts.js";
-import { asNumber, asObject, asOptionalNumber, asOptionalString, textResult } from "../tool-utils.js";
+import { asObject, asOptionalNumber, asOptionalString, textResult } from "../tool-utils.js";
 
 export const clickTools: ToolDefinition[] = [
   {
@@ -46,10 +46,12 @@ export const clickTools: ToolDefinition[] = [
       }
 
       if (x !== undefined || y !== undefined) {
-        const clickX = asNumber(x, "x");
-        const clickY = asNumber(y, "y");
-        await cdp.clickCoordinates(clickX, clickY);
-        return textResult(`Clicked coordinates (${clickX}, ${clickY}).`);
+        if (x === undefined || y === undefined) {
+          throw new Error("Provide both x and y coordinates together.");
+        }
+
+        await cdp.clickCoordinates(x, y);
+        return textResult(`Clicked coordinates (${x}, ${y}).`);
       }
 
       throw new Error("Provide one click target: selector, text, or both x and y coordinates.");

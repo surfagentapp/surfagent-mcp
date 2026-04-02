@@ -1,5 +1,5 @@
 import type { ToolDefinition } from "../contracts.js";
-import { asObject, asOptionalNumber, asOptionalString, asString, textResult } from "../tool-utils.js";
+import { asOptionalNumber, asOptionalObject, asOptionalString, asString, textResult } from "../tool-utils.js";
 
 export const scrollTools: ToolDefinition[] = [
   {
@@ -24,7 +24,7 @@ export const scrollTools: ToolDefinition[] = [
       additionalProperties: false
     },
     handler: async (args, { cdp }) => {
-      const input = asObject(args, "browser_scroll arguments");
+      const input = asOptionalObject(args, "browser_scroll arguments");
       const selector = asOptionalString(input.selector);
 
       if (selector) {

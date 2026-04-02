@@ -8,6 +8,14 @@ export function asObject(value: unknown, context: string): Record<string, unknow
   return value as Record<string, unknown>;
 }
 
+export function asOptionalObject(value: unknown, context: string): Record<string, unknown> {
+  if (value === undefined || value === null) {
+    return {};
+  }
+
+  return asObject(value, context);
+}
+
 export function asString(value: unknown, field: string): string {
   if (typeof value !== "string" || value.trim() === "") {
     throw new Error(`${field} must be a non-empty string.`);
