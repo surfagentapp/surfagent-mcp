@@ -1,5 +1,5 @@
 import type { ToolDefinition } from "../contracts.js";
-import { asObject, asOptionalBoolean, asOptionalString, imageResult } from "../tool-utils.js";
+import { asObject, asOptionalBoolean, asOptionalString, imageResult, textResult } from "../tool-utils.js";
 
 export const screenshotTools: ToolDefinition[] = [
   {
@@ -34,7 +34,18 @@ export const screenshotTools: ToolDefinition[] = [
 
       const data = await cdp.captureScreenshot(options);
 
-      return imageResult(data, "image/png");
+      if (!data) {
+        return textResult("Screenshot capture returned empty data. Is a page loaded?");
+      }
+
+      // Return both image (for MCP clients that support it) and text fallback
+      // Some providers (e.g. Codex) only handle text content blocks
+      return {
+        content: [
+          { type: "image", data, mimeType: "image/png" },
+          { type: "text", text: `Screenshot captured (${Math.round(data.length * 3 / 4 / 1024)}KB). Base64 data:URI: data:image/png;base64,${data.slice(0, 200)}...` }
+        ]
+      };
     }
   }
 ];

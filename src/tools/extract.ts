@@ -1,5 +1,6 @@
 import type { ToolDefinition } from "../contracts.js";
 import { asObject, asOptionalBoolean, asOptionalNumber, asOptionalString, textResult } from "../tool-utils.js";
+import { daemonHeaders } from "../daemon-auth.js";
 
 const SURFAGENT_DAEMON_URL = process.env.SURFAGENT_DAEMON_URL ?? "http://127.0.0.1:7201";
 
@@ -74,7 +75,7 @@ export const extractTools: ToolDefinition[] = [
 
       const res = await fetch(`${SURFAGENT_DAEMON_URL}/browser/extract`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: daemonHeaders(),
         body: JSON.stringify(body),
         signal: AbortSignal.timeout(60_000)
       });

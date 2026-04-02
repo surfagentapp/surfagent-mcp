@@ -83,6 +83,7 @@ export const cookiesTools: ToolDefinition[] = [
         },
         urls: {
           type: "array",
+          items: { type: "string" },
           description: "Optional URLs for cookie filtering"
         },
         cookie: {
